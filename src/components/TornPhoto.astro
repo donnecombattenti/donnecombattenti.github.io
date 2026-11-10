@@ -1,0 +1,122 @@
+---
+/**
+ * Foto in bianco e nero sgranata, ritagliata a "carta strappata" come nel poster.
+ * Senza `src` mostra un segnaposto con la stessa resa.
+ */
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+import { createRandom, round } from '../lib/random';
+
+interface Props {
+  src?: ImageMetadata;
+  alt?: string;
+  seed?: number;
+  class?: string;
+  sizes?: string;
+  /** `object-position` dell'immagine, per scegliere quale parte resta nel ritaglio 4:5. */
+  position?: string;
+  /** Rapporto larghezza/altezza da usare al posto del ritaglio 4:5 (es. le proporzioni originali della foto). */
+  ratio?: number;
+  /** Mantiene i colori originali invece della resa in bianco e nero (la grana resta). */
+  color?: boolean;
+}
+
+const {
+  src,
+  alt = '',
+  seed = 3,
+  class: className,
+  sizes = '(min-width: 768px) 40vw, 100vw',
+  position,
+  ratio,
+  color = false,
+} = Astro.props;
+const rnd = createRandom(seed);
+
+// Angoli tagliati di sbieco + bordi leggermente frastagliati (coordinate in %).
+// Sulle foto orizzontali i tagli in larghezza si accorciano, così gli angoli non si mangiano l'immagine.
+const squeeze = ratio && ratio > 1 ? 1 / ratio : 1;
+const cut = (scale = 1) => rnd.range(4, 18) * scale;
+const corners = {
+  tl: [cut(squeeze), cut()],
+  tr: [cut(squeeze), cut()],
+  br: [cut(squeeze), cut()],
+  bl: [cut(squeeze), cut()],
+};
+const jitter = () => rnd.range(0, 1.6);
+const edge = (from: [number, number], to: [number, number], inward: [number, number]) => {
+  const pts: string[] = [];
+  const steps = 9;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const j = jitter();
+    pts.push(`${round(from[0] + (to[0] - from[0]) * t + inward[0] * j)}% ${round(from[1] + (to[1] - from[1]) * t + inward[1] * j)}%`);
+  }
+  return pts;
+};
+const polygon = [
+  ...edge([corners.tl[0], 0], [100 - corners.tr[0], 0], [0, 1]),
+  ...edge([100, corners.tr[1]], [100, 100 - corners.br[1]], [-1, 0]),
+  ...edge([100 - corners.br[0], 100], [corners.bl[0], 100], [0, -1]),
+  ...edge([0, 100 - corners.bl[1]], [0, corners.tl[1]], [1, 0]),
+].join(', ');
+---
+
+<figure
+  class:list={['torn', color && 'torn--color', className]}
+  style={`--torn-shape: polygon(${polygon})${ratio ? `; aspect-ratio: ${ratio.toFixed(3)}` : ''}`}
+>
+  {
+    src ? (
+      <Image
+        src={src}
+        alt={alt}
+        sizes={sizes}
+        widths={[480, 800, 1200]}
+        class="torn__img"
+        style={position && `object-position: ${position}`}
+      />
+    ) : (
+      <div class="torn__placeholder" role="img" aria-label={alt || 'Immagine in arrivo'} />
+    )
+  }
+</figure>
+
+<style>
+  .torn {
+    position: relative;
+    clip-path: var(--torn-shape);
+    background: var(--color-gray);
+    aspect-ratio: 4 / 5;
+  }
+
+  .torn__img,
+  .torn__placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: grayscale(1) contrast(1.25) brightness(1.02);
+  }
+
+  .torn--color .torn__img {
+    filter: contrast(1.08);
+  }
+
+  .torn__placeholder {
+    background:
+      radial-gradient(ellipse 60% 45% at 35% 30%, #cfcac6, transparent 70%),
+      radial-gradient(ellipse 70% 60% at 70% 85%, #1f1c1c, transparent 75%),
+      linear-gradient(160deg, #a19c9a, #565151);
+  }
+
+  /* Grana fotografica */
+  .torn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+    opacity: 0.75;
+  }
+</style>

@@ -1,0 +1,23 @@
+# build output
+dist/
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+
+# environment
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# sorgenti grafici pesanti (restano fuori dal repo)
+*.psd
+dist-offline/
+
+# istruzioni per agenti AI, solo in locale
+AGENTS.md
